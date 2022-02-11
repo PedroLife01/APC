@@ -9,4 +9,4 @@ n2 = int(segunda[1])
 v2 = float(segunda[2])
 valor2 = n2*v2
 TOTAL = valor1+valor2
-print('VALOR A PAGAR: R$ {:.2f}'.format(TOTAL))
+print('VALOR A PAGAR: R$ {:02d.2f}'.format(TOTAL))
