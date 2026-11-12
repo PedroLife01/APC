@@ -1,5 +1,6 @@
 // =============================================================================
 //  Software Basico - Trabalho Pratico 1
+//  Aluno: Pedro Victor Roriz Sardenberg - Matricula: 212007369
 //  Programa MONTADOR
 //
 //  Uso: ./montador programa.asm

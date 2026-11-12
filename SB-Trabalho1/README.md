@@ -1,5 +1,7 @@
 # Software Básico — Trabalho Prático 1: Montador e Ligador
 
+**Aluno:** Pedro Victor Roriz Sardenberg — **Matrícula:** 212007369
+
 Montador de **duas passagens** e ligador, em C++, para a linguagem de montagem
 hipotética vista em aula (14 instruções).
 

@@ -1,5 +1,6 @@
 // =============================================================================
 //  Software Basico - Trabalho Pratico 1
+//  Aluno: Pedro Victor Roriz Sardenberg - Matricula: 212007369
 //  Programa LIGADOR
 //
 //  Uso: ./ligador prog1.asm [prog2.asm] [prog3.asm]   (no maximo 3 programas)
