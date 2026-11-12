@@ -1,0 +1,5 @@
+montador
+ligador
+*.LIG
+*.OBJ
+!*_referencia.OBJ
