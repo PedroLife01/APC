@@ -1,0 +1,64 @@
+----------------------------------------------------------------------
+1) Conversas TCP (quem falou com quem)
+----------------------------------------------------------------------
+10.10.1.10:53848           <-> 10.10.2.10:80                    4 547 bytes       6 601 bytes      10 1148 bytes     0.000000000         0.0036
+10.10.1.10:53852           <-> 10.10.2.10:80                    4 491 bytes       6 554 bytes      10 1045 bytes     0.010088000         0.0019
+----------------------------------------------------------------------
+2) Requisições HTTP: método, URI, Host, User-Agent e Cookie
+----------------------------------------------------------------------
+frame.number|ip.src|http.request.method|http.request.uri|http.host|http.user_agent|http.cookie
+4|10.10.1.10|POST|/login|web.lab|Mozilla/5.0 (cliente-comum)|
+14|10.10.1.10|GET|/area-protegida|web.lab|Mozilla/5.0 (cliente-comum)|sessao=6434ed544f0e14362071298011376625
+----------------------------------------------------------------------
+3) Corpo do formulário (application/x-www-form-urlencoded)
+----------------------------------------------------------------------
+Form item: "usuario" = "alice"
+Form item: "senha" = "SenhaSecreta123"
+----------------------------------------------------------------------
+4) Respostas HTTP: código, Server e Set-Cookie (cookie de sessão)
+----------------------------------------------------------------------
+frame.number|http.response.code|http.server|http.set_cookie
+6|303|nginx/1.24.0 (Ubuntu)|sessao=6434ed544f0e14362071298011376625; Path=/; HttpOnly
+16|200|nginx/1.24.0 (Ubuntu)|
+----------------------------------------------------------------------
+5) Bytes crus do pacote com a senha (tcpdump -A)
+----------------------------------------------------------------------
+I>..B....?.......
+{*e....<POST /login HTTP/1.1
+Host: web.lab
+User-Agent: Mozilla/5.0 (cliente-comum)
+Accept: */*
+Content-Length: 35
+Content-Type: application/x-www-form-urlencoded
+
+usuario=alice&senha=SenhaSecreta123
+----------------------------------------------------------------------
+6) Fluxo TCP completo da 1a conexão, como no 'Follow TCP Stream' do Wireshark
+----------------------------------------------------------------------
+
+===================================================================
+Follow: tcp,ascii
+Filter: tcp.stream eq 0
+Node 0: 10.10.1.10:53848
+Node 1: 10.10.2.10:80
+197
+POST /login HTTP/1.1
+Host: web.lab
+User-Agent: Mozilla/5.0 (cliente-comum)
+Accept: */*
+Content-Length: 35
+Content-Type: application/x-www-form-urlencoded
+
+usuario=alice&senha=SenhaSecreta123
+	275
+HTTP/1.1 303 See Other
+Server: nginx/1.24.0 (Ubuntu)
+Date: Tue, 24 Nov 2026 12:39:30 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 0
+Connection: keep-alive
+Location: /area-protegida
+Set-Cookie: sessao=6434ed544f0e14362071298011376625; Path=/; HttpOnly
+
+
+===================================================================

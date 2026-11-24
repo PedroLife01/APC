@@ -1,0 +1,20 @@
+#!/usr/sbin/nft -f
+# Política ABERTA (cenário inseguro): o firewall só roteia, não bloqueia nada.
+# Serve de linha de base para comparar com protegido.nft (Membro D).
+#
+# Truque para recarregar sem erro: declarar a tabela, apagá-la e recriá-la.
+# Não usamos "flush ruleset" porque isso apagaria também as regras que o
+# Docker coloca dentro do contêiner para o DNS interno (127.0.0.11).
+
+table inet lab
+delete table inet lab
+
+table inet lab {
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+
+        # Contadores só para evidência: mostram que o tráfego passa pelo firewall.
+        ip saddr 10.10.1.0/24 ip daddr 10.10.2.0/24 counter comment "clientes -> servidores"
+        ip saddr 10.10.2.0/24 ip daddr 10.10.1.0/24 counter comment "servidores -> clientes"
+    }
+}

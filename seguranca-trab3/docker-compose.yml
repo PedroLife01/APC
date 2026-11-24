@@ -1,0 +1,150 @@
+# Laboratório CIC0201 - Trabalho 3
+# Topologia: duas redes isoladas ligadas SOMENTE pelo contêiner "firewall".
+#
+#   rede_clientes 10.10.1.0/24            rede_servidores 10.10.2.0/24
+#   cliente-comum 10.10.1.10 ─┐        ┌─ web (Nginx) 10.10.2.10
+#   cliente-admin 10.10.1.20 ─┼─ firewall ─┼─ app (Python) 10.10.2.20
+#                   10.10.1.254 ┘        └ 10.10.2.254
+#   captura (tcpdump) roda DENTRO do namespace de rede do firewall.
+#
+# O cenário ativo (inseguro | protegido) vem do arquivo .env (variável CENARIO).
+# Use "make inseguro" ou "make protegido" em vez de editar à mão.
+
+name: lab-seguranca
+
+# Trecho reutilizado por todo contêiner que precisa mandar o tráfego pelo firewall.
+# O script rede/rota.sh troca a rota padrão para o IP do firewall e depois
+# executa o programa principal do contêiner (o "command").
+x-roteado: &roteado
+  entrypoint: ["sh", "/usr/local/bin/rota.sh"]
+  cap_add: [NET_ADMIN]   # necessário para alterar a tabela de rotas
+  init: true             # encerra rápido no "docker compose down"
+  depends_on: [firewall]
+
+# Duas opções nas redes, ambas para garantir que o ÚNICO caminho entre elas é o firewall:
+#  - inhibit_ipv4: o host Docker NÃO recebe IP nessas bridges. Sem isso, um cliente
+#    poderia trocar a rota para o host (10.10.1.1) e chegar aos servidores
+#    contornando o firewall (testamos: funcionava). Efeito colateral desejado: as
+#    redes ficam sem acesso à internet, isoladas como pede o enunciado.
+#  - gateway_mode_ipv4=nat-unprotected: desde a versão 28, o Docker põe no host uma
+#    regra anti-spoofing (iptables raw "-d <IP do contêiner> ! -i <bridge> -j DROP")
+#    que descartaria o pacote cliente->10.10.2.10 ao atravessar a bridge dos
+#    clientes até o firewall. Quem filtra aqui é o NOSSO firewall.
+networks:
+  rede_clientes:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.inhibit_ipv4: "true"
+      com.docker.network.bridge.gateway_mode_ipv4: nat-unprotected
+    ipam:
+      config:
+        - subnet: 10.10.1.0/24
+          gateway: 10.10.1.1     # reservado pelo Docker; não existe de fato (inhibit_ipv4)
+  rede_servidores:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.inhibit_ipv4: "true"
+      com.docker.network.bridge.gateway_mode_ipv4: nat-unprotected
+    ipam:
+      config:
+        - subnet: 10.10.2.0/24
+          gateway: 10.10.2.1
+
+services:
+  # ---------------- Firewall / gateway (Membro A cria, Membro D escreve as regras)
+  firewall:
+    build: ./firewall
+    hostname: firewall
+    cap_add: [NET_ADMIN, NET_RAW]
+    sysctls:
+      net.ipv4.ip_forward: "1"    # transforma o contêiner em roteador
+    environment:
+      CENARIO: ${CENARIO:-inseguro}
+    volumes:
+      - ./firewall:/firewall:ro   # editar um .nft não exige rebuild
+    init: true
+    networks:
+      rede_clientes:
+        ipv4_address: 10.10.1.254
+      rede_servidores:
+        ipv4_address: 10.10.2.254
+
+  # ---------------- Captura: tcpdump/tshark no MESMO namespace de rede do firewall
+  captura:
+    build: ./captura
+    network_mode: "service:firewall"  # enxerga as interfaces do firewall
+    cap_add: [NET_ADMIN, NET_RAW]
+    depends_on: [firewall]
+    volumes:
+      - ./evidencias:/evidencias      # os .pcap aparecem em ./evidencias no host
+      - ./captura:/captura:ro
+    init: true
+    command: ["sleep", "infinity"]
+
+  # ---------------- Clientes
+  cliente-comum:
+    <<: *roteado
+    build: ./clientes
+    hostname: cliente-comum
+    environment:
+      GATEWAY: 10.10.1.254
+    volumes:
+      - ./rede/rota.sh:/usr/local/bin/rota.sh:ro
+      - ./certs:/certs:ro               # CA do laboratório (gerada pelo Membro B)
+    extra_hosts:                        # "DNS" do laboratório
+      - "web.lab:10.10.2.10"
+      - "app:10.10.2.20"
+    networks:
+      rede_clientes:
+        ipv4_address: 10.10.1.10
+    command: ["sleep", "infinity"]
+
+  cliente-admin:
+    <<: *roteado
+    build: ./clientes
+    hostname: cliente-admin
+    environment:
+      GATEWAY: 10.10.1.254
+    volumes:
+      - ./rede/rota.sh:/usr/local/bin/rota.sh:ro
+      - ./certs:/certs:ro
+    extra_hosts:
+      - "web.lab:10.10.2.10"
+      - "app:10.10.2.20"
+    networks:
+      rede_clientes:
+        ipv4_address: 10.10.1.20
+    command: ["sleep", "infinity"]
+
+  # ---------------- Servidor web (Membro B: Nginx 80/443/8080 -> app:8000)
+  web:
+    <<: *roteado
+    build: ./web
+    hostname: web
+    depends_on: [firewall, app]
+    environment:
+      GATEWAY: 10.10.2.254
+      CENARIO: ${CENARIO:-inseguro}
+    volumes:
+      - ./rede/rota.sh:/usr/local/bin/rota.sh:ro
+      - ./certs:/certs:ro
+    networks:
+      rede_servidores:
+        ipv4_address: 10.10.2.10
+    command: ["nginx", "-g", "daemon off;"]
+
+  # ---------------- Aplicação (Membro C: login, sessão, HMAC)
+  app:
+    <<: *roteado
+    build: ./app
+    hostname: app
+    environment:
+      GATEWAY: 10.10.2.254
+      CENARIO: ${CENARIO:-inseguro}
+      HMAC_CHAVE: ${HMAC_CHAVE:-troque-esta-chave}
+    volumes:
+      - ./rede/rota.sh:/usr/local/bin/rota.sh:ro
+    networks:
+      rede_servidores:
+        ipv4_address: 10.10.2.20
+    command: ["python3", "-u", "/app/app.py"]
